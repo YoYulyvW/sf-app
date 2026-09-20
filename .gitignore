@@ -1,0 +1,10 @@
+# Xcode / XcodeGen
+*.xcodeproj/
+DerivedData/
+build/
+*.ipa
+*.xcarchive
+.DS_Store
+xcuserdata/
+*.xcuserstate
+Payload/

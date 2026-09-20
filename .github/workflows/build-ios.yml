@@ -1,0 +1,64 @@
+name: Build Unsigned IPA
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer || true
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Install ldid
+        run: brew install ldid
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build (unsigned)
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project SFApp.xcodeproj \
+            -scheme SFApp \
+            -sdk iphoneos \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            -derivedDataPath build \
+            clean build
+
+      - name: Package IPA
+        run: |
+          set -euo pipefail
+          APP_PATH="build/Build/Products/Release-iphoneos/SFApp.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "找不到编译产物: $APP_PATH"
+            find build/Build/Products -maxdepth 3
+            exit 1
+          fi
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          # 假签名：TrollStore 不校验签名有效性，但假签名能提升兼容性
+          ldid -Sentitlements.plist "Payload/SFApp.app/SFApp" || ldid -S "Payload/SFApp.app/SFApp"
+          zip -r SFApp.ipa Payload
+          mkdir -p out
+          mv SFApp.ipa out/
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SFApp-unsigned
+          path: out/SFApp.ipa
+          retention-days: 30
